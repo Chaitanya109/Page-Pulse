@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: page-pulse-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: page-pulse-app
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+      LOG_JSON: "true"
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT_STORAGE_URL: redis://redis:6379/1
+      CACHE_ENABLED: "true"
+      RATE_LIMIT_ENABLED: "true"
+      MAX_CONCURRENT_AUDITS: "20"
+      REQUEST_TIMEOUT_SECONDS: "8.0"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis-data:
